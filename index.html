@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM-D Inference Scheduler Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50, #3498db);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .demo-controls {
+            background: #f8f9fa;
+            padding: 20px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .scenario-selector {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .scenario-btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            background: #e9ecef;
+            color: #495057;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+
+        .scenario-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .scenario-btn.active {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .main-content {
+            display: flex;
+            gap: 20px;
+            padding: 20px;
+            min-height: 600px;
+        }
+
+        .request-panel {
+            flex: 1;
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+        }
+
+        .pods-panel {
+            flex: 2;
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+        }
+
+        .scheduling-panel {
+            flex: 1;
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+        }
+
+        .panel-title {
+            font-size: 1.4em;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .request-details {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-left: 4px solid #3498db;
+        }
+
+        .request-prompt {
+            background: #e8f6ff;
+            padding: 10px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            margin: 10px 0;
+        }
+
+        .pods-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 15px;
+        }
+
+        .pod-card {
+            background: white;
+            border-radius: 12px;
+            padding: 15px;
+            border: 3px solid transparent;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .pod-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: #e9ecef;
+        }
+
+        .pod-card.prefill::before {
+            background: linear-gradient(90deg, #ff6b6b, #ee5a24);
+        }
+
+        .pod-card.decode::before {
+            background: linear-gradient(90deg, #00b894, #00a085);
+        }
+
+        .pod-card.both::before {
+            background: linear-gradient(90deg, #fdcb6e, #e17055);
+        }
+
+        .pod-card.selected {
+            border-color: #2ecc71;
+            box-shadow: 0 8px 25px rgba(46, 204, 113, 0.3);
+            transform: translateY(-3px);
+        }
+
+        .pod-card.filtered-out {
+            opacity: 0.3;
+            transform: scale(0.95);
+        }
+
+        .pod-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .pod-name {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .pod-role {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .role-prefill {
+            background: #ffe6e6;
+            color: #d63031;
+        }
+
+        .role-decode {
+            background: #e6f7f1;
+            color: #00b894;
+        }
+
+        .role-both {
+            background: #fff2e6;
+            color: #e17055;
+        }
+
+        .pod-metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin: 10px 0;
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85em;
+        }
+
+        .metric-label {
+            color: #6c757d;
+        }
+
+        .metric-value {
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .score-bar {
+            height: 6px;
+            background: #e9ecef;
+            border-radius: 3px;
+            margin: 8px 0;
+            overflow: hidden;
+        }
+
+        .score-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #74b9ff, #0984e3);
+            width: 0;
+            transition: width 1s ease-out;
+        }
+
+        .score-text {
+            text-align: center;
+            font-size: 0.8em;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+
+        .scheduling-steps {
+            space-y: 15px;
+        }
+
+        .step {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-left: 4px solid #e9ecef;
+            transition: all 0.3s;
+        }
+
+        .step.active {
+            border-left-color: #3498db;
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.2);
+        }
+
+        .step-title {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 8px;
+        }
+
+        .step-description {
+            color: #6c757d;
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+
+        .result-banner {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .result-banner.pd-mode {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+        }
+
+        .animate-pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .config-info {
+            background: white;
+            border-radius: 10px;
+            padding: 12px;
+            font-size: 0.85em;
+            color: #6c757d;
+        }
+
+        .tooltip {
+            position: relative;
+            cursor: help;
+        }
+
+        .tooltip:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #2c3e50;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.8em;
+            white-space: nowrap;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧠 LLM-D Inference Scheduler</h1>
+            <p>Interactive visualization of intelligent request routing with real-world scenarios</p>
+        </div>
+
+        <div class="demo-controls">
+            <div class="scenario-selector">
+                <button class="scenario-btn active" onclick="selectScenario(0)">
+                    🚀 Short Prompt - Single Pod
+                </button>
+                <button class="scenario-btn" onclick="selectScenario(1)">
+                    🔄 Long Prompt - P/D Disaggregation
+                </button>
+                <button class="scenario-btn" onclick="selectScenario(2)">
+                    ⚡ High Load Filtering
+                </button>
+                <button class="scenario-btn" onclick="selectScenario(3)">
+                    🎯 Session Affinity
+                </button>
+                <button class="scenario-btn" onclick="selectScenario(4)">
+                    🚨 System Overload
+                </button>
+            </div>
+            <div class="config-info">
+                <strong>Configuration:</strong> PD_ENABLED=true, PD_THRESHOLD=100 tokens, Load Scorer Weight=10, Prefix Scorer Weight=5
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="request-panel">
+                <h3 class="panel-title">📨 Incoming Request</h3>
+                <div id="request-details" class="request-details">
+                    <!-- Request details will be populated here -->
+                </div>
+                <button onclick="startScheduling()" id="schedule-btn" 
+                        style="width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; margin-top: 15px;">
+                    🎯 Start Scheduling Process
+                </button>
+            </div>
+
+            <div class="pods-panel">
+                <h3 class="panel-title">🖥️ Available Pods</h3>
+                <div id="pods-grid" class="pods-grid">
+                    <!-- Pod cards will be populated here -->
+                </div>
+            </div>
+
+            <div class="scheduling-panel">
+                <h3 class="panel-title">⚙️ Scheduling Process</h3>
+                <div id="scheduling-steps" class="scheduling-steps">
+                    <!-- Scheduling steps will be populated here -->
+                </div>
+                <div id="result-banner" style="display: none;">
+                    <!-- Result will be shown here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Scenario data
+        const scenarios = [
+            {
+                name: "Short Prompt - Single Pod",
+                request: {
+                    model: "llama-7b",
+                    prompt: "Hello, how are you?",
+                    tokens: 5,
+                    maxTokens: 50,
+                    criticality: "Normal"
+                },
+                pods: [
+                    {name: "vllm-prefill-1", role: "prefill", address: "10.0.1.10", waitingQueue: 2, kvCache: 0.3, activeModels: {"llama-7b": 1}},
+                    {name: "vllm-prefill-2", role: "prefill", address: "10.0.1.11", waitingQueue: 0, kvCache: 0.1, activeModels: {"llama-7b": 1}},
+                    {name: "vllm-decode-1", role: "decode", address: "10.0.1.20", waitingQueue: 1, kvCache: 0.6, activeModels: {"llama-7b": 1}},
+                    {name: "vllm-decode-2", role: "decode", address: "10.0.1.21", waitingQueue: 0, kvCache: 0.4, activeModels: {"llama-7b": 1}},
+                    {name: "vllm-both-1", role: "both", address: "10.0.1.30", waitingQueue: 3, kvCache: 0.8, activeModels: {"llama-7b": 1}}
+                ],
+                steps: [
+                    {title: "1. Prompt Length Check", description: "5 tokens < 100 token threshold → Single pod mode", active: false},
+                    {title: "2. Decode Filter", description: "Keep pods that can handle decode: vllm-decode-1, vllm-decode-2, vllm-both-1", active: false},
+                    {title: "3. Load Aware Scoring", description: "Score based on waiting queue size (lower queue = higher score)", active: false},
+                    {title: "4. Pod Selection", description: "Select highest scoring pod for request routing", active: false}
+                ],
+                result: {
+                    selectedPod: "vllm-decode-2",
+                    reason: "Lowest queue (0 requests), best load score (5.0)",
+                    mode: "single"
+                }
+            },
+            {
+                name: "Long Prompt - P/D Disaggregation",
+                request: {
+                    model: "llama-7b",
+                    prompt: "You are a helpful AI assistant specialized in code review. Please analyze the following Python function...",
+                    tokens: 150,
+                    maxTokens: 200,
+                    criticality: "Normal"
+                },
+                pods: [
+                    {name: "vllm-prefill-1", role: "prefill", address: "10.0.1.10", waitingQueue: 2, kvCache: 0.3, activeModels: {"llama-7b": 1}, prefixMatch: 0.6},
+                    {name: "vllm-prefill-2", role: "prefill", address: "10.0.1.11", waitingQueue: 0, kvCache: 0.1, activeModels: {"llama-7b": 1}, prefixMatch: 0.0},
+                    {name: "vllm-decode-1", role: "decode", address: "10.0.1.20", waitingQueue: 1, kvCache: 0.6, activeModels: {"llama-7b": 1}, prefixMatch: 0.0},
+                    {name: "vllm-decode-2", role: "decode", address: "10.0.1.21", waitingQueue: 0, kvCache: 0.4, activeModels: {"llama-7b": 1}, prefixMatch: 0.4},
+                    {name: "vllm-both-1", role: "both", address: "10.0.1.30", waitingQueue: 3, kvCache: 0.8, activeModels: {"llama-7b": 1}, prefixMatch: 0.0}
+                ],
+                steps: [
+                    {title: "1. Prompt Length Check", description: "150 tokens > 100 token threshold → P/D disaggregation mode", active: false},
+                    {title: "2. Decode Pod Selection", description: "Filter decode-capable pods, score by load + prefix match", active: false},
+                    {title: "3. Prefill Pod Selection", description: "Filter prefill-capable pods, score by load + prefix match", active: false},
+                    {title: "4. Coordinate P/D Execution", description: "Set prefill URL header for decode pod coordination", active: false}
+                ],
+                result: {
+                    selectedPod: "vllm-decode-2",
+                    prefillPod: "vllm-prefill-1",
+                    reason: "Decode: good prefix match + decent load. Prefill: excellent prefix match",
+                    mode: "pd",
+                    headers: {"x-prefiller-url": "http://10.0.1.10:8000"}
+                }
+            },
+            {
+                name: "High Load Filtering",
+                request: {
+                    model: "llama-7b",
+                    prompt: "Translate this text to French: The quick brown fox jumps over the lazy dog repeatedly in various sentences...",
+                    tokens: 200,
+                    maxTokens: 150,
+                    criticality: "Sheddable"
+                },
+                pods: [
+                    {name: "vllm-prefill-1", role: "prefill", address: "10.0.1.10", waitingQueue: 10, kvCache: 0.8, activeModels: {"llama-7b": 1}},
+                    {name: "vllm-prefill-2", role: "prefill", address: "10.0.1.11", waitingQueue: 5, kvCache: 0.6, activeModels: {"llama-7b": 1}},
+                    {name: "vllm-decode-1", role: "decode", address: "10.0.1.20", waitingQueue: 15, kvCache: 0.9, activeModels: {"llama-7b": 1}},
+                    {name: "vllm-decode-2", role: "decode", address: "10.0.1.21", waitingQueue: 8, kvCache: 0.7, activeModels: {"llama-7b": 1}},
+                    {name: "vllm-both-1", role: "both", address: "10.0.1.30", waitingQueue: 20, kvCache: 0.95, activeModels: {"llama-7b": 1}}
+                ],
+                steps: [
+                    {title: "1. Prompt Length Check", description: "200 tokens > 100 → P/D disaggregation mode", active: false},
+                    {title: "2. Low Queue Filter", description: "Filter out pods with waitingQueue ≥ 10 (high load protection)", active: false},
+                    {title: "3. Remaining Pod Scoring", description: "Score remaining pods that passed the queue filter", active: false},
+                    {title: "4. Optimal Pod Selection", description: "Select best available pods despite system load", active: false}
+                ],
+                result: {
+                    selectedPod: "vllm-decode-2",
+                    prefillPod: "vllm-prefill-2",
+                    reason: "Only pods passing queue filter (< 10 waiting requests)",
+                    mode: "pd",
+                    headers: {"x-prefiller-url": "http://10.0.1.11:8000"}
+                }
+            },
+            {
+                name: "Session Affinity Override",
+                request: {
+                    model: "llama-7b",
+                    prompt: "Continue our previous conversation about machine learning algorithms and their applications...",
+                    tokens: 80,
+                    maxTokens: 100,
+                    criticality: "Normal",
+                    headers: {"x-session-token": "dmxsbS1kZWNvZGUtMQ=="}
+                },
+                pods: [
+                    {name: "vllm-prefill-1", role: "prefill", address: "10.0.1.10", waitingQueue: 2, kvCache: 0.3, activeModels: {"llama-7b": 1}},
+                    {name: "vllm-prefill-2", role: "prefill", address: "10.0.1.11", waitingQueue: 0, kvCache: 0.1, activeModels: {"llama-7b": 1}},
+                    {name: "vllm-decode-1", role: "decode", address: "10.0.1.20", waitingQueue: 1, kvCache: 0.6, activeModels: {"llama-7b": 1}, sessionMatch: true},
+                    {name: "vllm-decode-2", role: "decode", address: "10.0.1.21", waitingQueue: 0, kvCache: 0.4, activeModels: {"llama-7b": 1}},
+                    {name: "vllm-both-1", role: "both", address: "10.0.1.30", waitingQueue: 3, kvCache: 0.8, activeModels: {"llama-7b": 1}}
+                ],
+                steps: [
+                    {title: "1. Prompt Length Check", description: "80 tokens < 100 → Single pod mode", active: false},
+                    {title: "2. Session Token Decode", description: "Decode session token → target pod: vllm-decode-1", active: false},
+                    {title: "3. Session Affinity Scoring", description: "Session scorer gives perfect score (1.0) to target pod", active: false},
+                    {title: "4. Override Load Balancing", description: "Session affinity overrides load considerations for continuity", active: false}
+                ],
+                result: {
+                    selectedPod: "vllm-decode-1",
+                    reason: "Session affinity overrides load considerations (session continuity)",
+                    mode: "single"
+                }
+            },
+            {
+                name: "System Overload Scenario",
+                request: {
+                    model: "llama-7b",
+                    prompt: "Emergency: Please process this critical request for system diagnostics and recovery procedures...",
+                    tokens: 120,
+                    maxTokens: 200,
+                    criticality: "Critical"
+                },
+                pods: [
+                    {name: "vllm-prefill-1", role: "prefill", address: "10.0.1.10", waitingQueue: 45, kvCache: 0.95, activeModels: {"llama-7b": 1}},
+                    {name: "vllm-prefill-2", role: "prefill", address: "10.0.1.11", waitingQueue: 40, kvCache: 0.92, activeModels: {"llama-7b": 1}},
+                    {name: "vllm-decode-1", role: "decode", address: "10.0.1.20", waitingQueue: 50, kvCache: 0.98, activeModels: {"llama-7b": 1}},
+                    {name: "vllm-decode-2", role: "decode", address: "10.0.1.21", waitingQueue: 45, kvCache: 0.95, activeModels: {"llama-7b": 1}},
+                    {name: "vllm-both-1", role: "both", address: "10.0.1.30", waitingQueue: 60, kvCache: 0.99, activeModels: {"llama-7b": 1}}
+                ],
+                steps: [
+                    {title: "1. Critical Request Detection", description: "Request marked as Critical → bypass some filters", active: false},
+                    {title: "2. Capacity Filter Check", description: "All pods fail capacity check (>80% KV cache, >5 requests)", active: false},
+                    {title: "3. Graceful Degradation", description: "Proceed with scoring despite system overload", active: false},
+                    {title: "4. Least Bad Selection", description: "Choose pod with lowest queue despite poor conditions", active: false}
+                ],
+                result: {
+                    selectedPod: "vllm-decode-2",
+                    reason: "Least overloaded pod (45 vs 50 vs 60 queue), but response will be slow",
+                    mode: "single",
+                    warning: "System under extreme load - degraded performance expected"
+                }
+            }
+        ];
+
+        let currentScenario = 0;
+        let schedulingInProgress = false;
+
+        function selectScenario(index) {
+            if (schedulingInProgress) return;
+            
+            currentScenario = index;
+            
+            // Update active button
+            document.querySelectorAll('.scenario-btn').forEach((btn, i) => {
+                btn.classList.toggle('active', i === index);
+            });
+            
+            // Reset the display
+            displayRequest();
+            displayPods();
+            resetSchedulingSteps();
+        }
+
+        function displayRequest() {
+            const scenario = scenarios[currentScenario];
+            const request = scenario.request;
+            
+            const requestHTML = `
+                <div><strong>Model:</strong> ${request.model}</div>
+                <div><strong>Tokens:</strong> ${request.tokens} (Max: ${request.maxTokens})</div>
+                <div><strong>Criticality:</strong> ${request.criticality}</div>
+                ${request.headers ? `<div><strong>Headers:</strong> ${JSON.stringify(request.headers)}</div>` : ''}
+                <div class="request-prompt">
+                    <strong>Prompt:</strong><br>
+                    "${request.prompt.length > 100 ? request.prompt.substring(0, 100) + '...' : request.prompt}"
+                </div>
+            `;
+            
+            document.getElementById('request-details').innerHTML = requestHTML;
+        }
+
+        function displayPods() {
+            const scenario = scenarios[currentScenario];
+            const podsGrid = document.getElementById('pods-grid');
+            
+            podsGrid.innerHTML = scenario.pods.map(pod => `
+                <div class="pod-card ${pod.role}" id="pod-${pod.name}">
+                    <div class="pod-header">
+                        <div class="pod-name">${pod.name}</div>
+                        <div class="pod-role role-${pod.role}">${pod.role}</div>
+                    </div>
+                    <div class="pod-metrics">
+                        <div class="metric">
+                            <span class="metric-label">Queue:</span>
+                            <span class="metric-value">${pod.waitingQueue}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">KV Cache:</span>
+                            <span class="metric-value">${(pod.kvCache * 100).toFixed(0)}%</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Address:</span>
+                            <span class="metric-value">${pod.address}</span>
+                        </div>
+                        ${pod.prefixMatch !== undefined ? `
+                        <div class="metric">
+                            <span class="metric-label">Prefix Match:</span>
+                            <span class="metric-value">${(pod.prefixMatch * 100).toFixed(0)}%</span>
+                        </div>
+                        ` : ''}
+                        ${pod.sessionMatch ? `
+                        <div class="metric">
+                            <span class="metric-label">Session:</span>
+                            <span class="metric-value">Match ✓</span>
+                        </div>
+                        ` : ''}
+                    </div>
+                    <div class="score-bar">
+                        <div class="score-fill" id="score-fill-${pod.name}"></div>
+                    </div>
+                    <div class="score-text" id="score-text-${pod.name}">Score: 0.0</div>
+                </div>
+            `).join('');
+        }
+
+        function resetSchedulingSteps() {
+            const scenario = scenarios[currentScenario];
+            const stepsHTML = scenario.steps.map((step, index) => `
+                <div class="step" id="step-${index}">
+                    <div class="step-title">${step.title}</div>
+                    <div class="step-description">${step.description}</div>
+                </div>
+            `).join('');
+            
+            document.getElementById('scheduling-steps').innerHTML = stepsHTML;
+            document.getElementById('result-banner').style.display = 'none';
+            document.getElementById('schedule-btn').textContent = '🎯 Start Scheduling Process';
+        }
+
+        async function startScheduling() {
+            if (schedulingInProgress) return;
+            
+            schedulingInProgress = true;
+            document.getElementById('schedule-btn').textContent = '⚙️ Scheduling in Progress...';
+            document.getElementById('schedule-btn').disabled = true;
+            
+            const scenario = scenarios[currentScenario];
+            
+            // Reset all pods
+            scenario.pods.forEach(pod => {
+                const podCard = document.getElementById(`pod-${pod.name}`);
+                podCard.classList.remove('selected', 'filtered-out');
+                document.getElementById(`score-fill-${pod.name}`).style.width = '0%';
+                document.getElementById(`score-text-${pod.name}`).textContent = 'Score: 0.0';
+            });
+            
+            // Execute steps with animation
+            for (let i = 0; i < scenario.steps.length; i++) {
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                
+                // Activate current step
+                document.getElementById(`step-${i}`).classList.add('active');
+                
+                // Simulate step execution
+                await executeStep(i, scenario);
+            }
+            
+            // Show final result
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            showResult(scenario);
+            
+            schedulingInProgress = false;
+            document.getElementById('schedule-btn').textContent = '🔄 Run Again';
+            document.getElementById('schedule-btn').disabled = false;
+        }
+
+        async function executeStep(stepIndex, scenario) {
+            switch (stepIndex) {
+                case 0: // Prompt length check or initial analysis
+                    // Just visual feedback
+                    break;
+                    
+                case 1: // Filtering step
+                    if (scenario.name.includes("High Load")) {
+                        // Filter out high queue pods
+                        scenario.pods.forEach(pod => {
+                            if (pod.waitingQueue >= 10) {
+                                document.getElementById(`pod-${pod.name}`).classList.add('filtered-out');
+                            }
+                        });
+                    } else if (scenario.name.includes("Short Prompt") || scenario.name.includes("Session Affinity") || scenario.name.includes("System Overload")) {
+                        // Filter for decode-capable pods only
+                        scenario.pods.forEach(pod => {
+                            if (pod.role === 'prefill') {
+                                document.getElementById(`pod-${pod.name}`).classList.add('filtered-out');
+                            }
+                        });
+                    } else {
+                        // P/D mode - show filtering for both prefill and decode
+                        // Don't filter here, will be done in separate steps
+                    }
+                    break;
+                    
+                case 2: // Scoring step
+                    await animateScoring(scenario);
+                    break;
+                    
+                case 3: // Final selection
+                    highlightSelectedPods(scenario);
+                    break;
+            }
+        }
+
+        async function animateScoring(scenario) {
+            const pods = scenario.pods;
+            
+            // Calculate scores based on scenario
+            pods.forEach(pod => {
+                let score = 0;
+                const podCard = document.getElementById(`pod-${pod.name}`);
+                
+                // Skip if filtered out
+                if (podCard.classList.contains('filtered-out')) {
+                    return;
+                }
+                
+                // Load-based scoring (queue size)
+                const queueThreshold = 128;
+                let loadScore = 0;
+                if (pod.waitingQueue === 0) {
+                    loadScore = 0.5;
+                } else {
+                    const normalizedQueue = Math.min(pod.waitingQueue, queueThreshold);
+                    loadScore = 0.5 * (1.0 - (normalizedQueue / queueThreshold));
+                }
+                score += loadScore * 10; // Weight of 10
+                
+                // Prefix-based scoring
+                if (pod.prefixMatch !== undefined) {
+                    score += pod.prefixMatch * 5; // Weight of 5
+                }
+                
+                // Session affinity scoring
+                if (pod.sessionMatch) {
+                    score += 20; // Very high weight for session affinity
+                }
+                
+                // Normalize score for display (0-10 scale)
+                const displayScore = Math.min(score, 10);
+                const percentage = (displayScore / 10) * 100;
+                
+                // Animate score bar
+                setTimeout(() => {
+                    document.getElementById(`score-fill-${pod.name}`).style.width = `${percentage}%`;
+                    document.getElementById(`score-text-${pod.name}`).textContent = `Score: ${score.toFixed(4)}`;
+                }, Math.random() * 500);
+            });
+        }
+
+        function highlightSelectedPods(scenario) {
+            const result = scenario.result;
+            
+            // Highlight main selected pod
+            document.getElementById(`pod-${result.selectedPod}`).classList.add('selected');
+            
+            // Highlight prefill pod if in P/D mode
+            if (result.prefillPod) {
+                document.getElementById(`pod-${result.prefillPod}`).classList.add('selected');
+            }
+        }
+
+        function showResult(scenario) {
+            const result = scenario.result;
+            const banner = document.getElementById('result-banner');
+            
+            let resultHTML = `
+                <h3>🎯 Scheduling Result</h3>
+                <div style="margin: 15px 0;">
+                    <strong>Selected Pod:</strong> ${result.selectedPod}<br>
+                    ${result.prefillPod ? `<strong>Prefill Pod:</strong> ${result.prefillPod}<br>` : ''}
+                    <strong>Reason:</strong> ${result.reason}
+                </div>
+            `;
+            
+            if (result.headers) {
+                resultHTML += `
+                    <div style="margin: 10px 0; padding: 10px; background: rgba(255,255,255,0.2); border-radius: 8px; font-family: monospace; font-size: 0.9em;">
+                        <strong>Headers Added:</strong><br>
+                        ${Object.entries(result.headers).map(([key, value]) => `${key}: ${value}`).join('<br>')}
+                    </div>
+                `;
+            }
+            
+            if (result.warning) {
+                resultHTML += `
+                    <div style="margin: 10px 0; padding: 10px; background: rgba(255,193,7,0.3); border-radius: 8px; color: #856404;">
+                        <strong>⚠️ Warning:</strong> ${result.warning}
+                    </div>
+                `;
+            }
+            
+            banner.innerHTML = resultHTML;
+            banner.className = `result-banner ${result.mode === 'pd' ? 'pd-mode' : ''}`;
+            banner.style.display = 'block';
+        }
+
+        // Initialize the demo
+        document.addEventListener('DOMContentLoaded', function() {
+            selectScenario(0);
+        });
+
+        // Add some interactive tooltips for better UX
+        document.addEventListener('mouseover', function(e) {
+            if (e.target.classList.contains('metric-value')) {
+                const label = e.target.parentElement.querySelector('.metric-label').textContent;
+                if (label === 'Queue:') {
+                    e.target.title = 'Number of requests waiting to be processed';
+                } else if (label === 'KV Cache:') {
+                    e.target.title = 'Percentage of key-value cache currently in use';
+                } else if (label === 'Prefix Match:') {
+                    e.target.title = 'Percentage of prompt that matches cached prefixes';
+                }
+            }
+        });
+
+        // Add keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            if (e.key >= '1' && e.key <= '5') {
+                const index = parseInt(e.key) - 1;
+                if (index < scenarios.length) {
+                    selectScenario(index);
+                }
+            } else if (e.key === ' ' || e.key === 'Enter') {
+                e.preventDefault();
+                startScheduling();
+            }
+        });
+    </script>
+</body>
+</html>
