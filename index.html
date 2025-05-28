@@ -339,6 +339,40 @@
             white-space: nowrap;
             z-index: 1000;
         }
+
+        .step.completed {
+            position: relative;
+            opacity: 0.85;
+        }
+        .step.completed::after {
+            content: '\2714'; /* Unicode checkmark */
+            position: absolute;
+            right: 20px;
+            top: 18px;
+            color: #2ecc71;
+            font-size: 1.5em;
+            font-weight: bold;
+            opacity: 0.9;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .progress-container {
+            width: 100%;
+            background: #e9ecef;
+            border-radius: 8px;
+            height: 16px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(52, 152, 219, 0.08);
+        }
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 8px 0 0 8px;
+            transition: width 0.7s cubic-bezier(0.4,0,0.2,1);
+        }
     </style>
 </head>
 <body>
@@ -392,6 +426,9 @@
 
             <div class="scheduling-panel">
                 <h3 class="panel-title">⚙️ Scheduling Process</h3>
+                <div class="progress-container">
+                    <div class="progress-bar" id="scheduling-progress-bar"></div>
+                </div>
                 <div id="scheduling-steps" class="scheduling-steps">
                     <!-- Scheduling steps will be populated here -->
                 </div>
@@ -664,18 +701,48 @@
                 document.getElementById(`score-fill-${pod.name}`).style.width = '0%';
                 document.getElementById(`score-text-${pod.name}`).textContent = 'Score: 0.0';
             });
-            
+            // Reset all steps
+            scenario.steps.forEach((_, i) => {
+                const stepElem = document.getElementById(`step-${i}`);
+                if (stepElem) {
+                    stepElem.classList.remove('active', 'completed');
+                }
+            });
+            // Reset progress bar
+            const progressBar = document.getElementById('scheduling-progress-bar');
+            if (progressBar) progressBar.style.width = '0%';
             // Execute steps with animation
             for (let i = 0; i < scenario.steps.length; i++) {
-                await new Promise(resolve => setTimeout(resolve, 1500));
-                
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                // Mark previous step as completed
+                if (i > 0) {
+                    const prevStep = document.getElementById(`step-${i-1}`);
+                    if (prevStep) {
+                        prevStep.classList.remove('active');
+                        prevStep.classList.add('completed');
+                    }
+                }
                 // Activate current step
-                document.getElementById(`step-${i}`).classList.add('active');
-                
+                const currStep = document.getElementById(`step-${i}`);
+                if (currStep) {
+                    currStep.classList.add('active');
+                }
+                // Update progress bar
+                if (progressBar) {
+                    const percent = ((i) / scenario.steps.length) * 100;
+                    progressBar.style.width = `${percent}%`;
+                }
                 // Simulate step execution
                 await executeStep(i, scenario);
             }
-            
+            // Mark last step as completed
+            const lastStep = document.getElementById(`step-${scenario.steps.length-1}`);
+            if (lastStep) {
+                lastStep.classList.remove('active');
+                lastStep.classList.add('completed');
+            }
+            // Fill progress bar to 100%
+            if (progressBar) progressBar.style.width = '100%';
             // Show final result
             await new Promise(resolve => setTimeout(resolve, 1000));
             showResult(scenario);
